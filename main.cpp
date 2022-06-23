@@ -13,23 +13,25 @@ template<typename T>
 class shared_ptr
 {
 public:
-    shared_ptr() : data_pointer{ nullptr }, control_block{ new ControlBlock<T> }
+    shared_ptr()
     {}
     explicit shared_ptr(T* data) : data_pointer{ data }, control_block{ new ControlBlock<T> }
     {
-        control_block->data_pointer = data;
+        control_block->data_pointer = data_pointer;
         ++control_block->reference_counter;
     }
     shared_ptr(const shared_ptr<T>& other) noexcept
     {
         data_pointer = other.data_pointer;
-        --control_block; ++other.control_block->reference_counter;
+        delete control_block;
         control_block = other.control_block;
+        ++control_block->reference_counter;
     }
     shared_ptr<T>& operator=(const shared_ptr<T>& other)
     {
         if (this == &other)
             return *this;
+        deref();
         data_pointer = other.data_pointer;
         --control_block; ++other.control_block->reference_counter;
         control_block = other.control_block;
@@ -40,13 +42,19 @@ public:
     shared_ptr(shared_ptr<T>&& other) noexcept
     {
         std::swap(data_pointer, other.data_pointer);
-        //std::swap(control_block->reference_counter, other.control_block->reference_counter);
+        delete control_block;
+        std::swap(control_block, other.control_block);
     }
 
     shared_ptr<T>& operator=(shared_ptr<T>&& other) noexcept
     {
+        if (this == &other)
+            return *this;
+        deref();
         std::swap(data_pointer, other.data_pointer);
-        std::swap(control_block->reference_counter, other.control_block->reference_counter);
+        control_block = other.control_block;
+        other.control_block = nullptr;
+
         return *this;
     }
 
@@ -55,7 +63,15 @@ public:
 
     ~shared_ptr()
     {
-        if(control_block)
+        deref();
+    }
+
+public:
+    size_t use_count() { return control_block->reference_counter; }
+private:
+    void deref()
+    {
+        if (control_block)
         {
             if (control_block->reference_counter == 1) {
                 delete data_pointer;
@@ -68,12 +84,8 @@ public:
             }
         }
     }
-
-public:
-    size_t use_count() { return control_block->reference_counter; }
-private:
     T* data_pointer{};
-    ControlBlock<T>* control_block{};
+    ControlBlock<T>* control_block{new ControlBlock<T>()};
 };
 
 class A
@@ -98,6 +110,6 @@ int main() {
     shared_ptr<int> sh{ new int(5) };
     shared_ptr<int> s(sh);
     shared_ptr<int> sd(std::move(s));
-    test();
+    //test();
     return 0;
 }
